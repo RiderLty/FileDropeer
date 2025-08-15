@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { ConfigSetup } from "@/components/config-setup";
 import { FileUploader } from "@/components/file-uploader";
+import { Button } from '@/components/ui/button';
+import { Settings } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 type Config = {
   token: string;
@@ -63,13 +67,29 @@ export default function Home() {
       <div className="w-full max-w-2xl mx-auto">
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-bold text-primary font-headline">FileDrop Zone</h1>
-          <p className="text-muted-foreground mt-2">
-            Drag, drop, and upload your files with ease and style.
-          </p>
+          <div className="flex items-center justify-center mt-2">
+            <p className="text-muted-foreground">
+              Drag, drop, and upload your files with ease and style.
+            </p>
+            {config && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground h-6 w-6" onClick={handleResetConfig}>
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Reset Configuration</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         </header>
         
         {config ? (
-          <FileUploader config={config} onResetConfig={handleResetConfig} />
+          <FileUploader config={config} />
         ) : (
           <ConfigSetup onConfigured={handleConfigured} />
         )}

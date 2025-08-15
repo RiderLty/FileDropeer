@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { UploadCloud, File as FileIcon, Sparkles, X, RotateCcw, Settings, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, File as FileIcon, Sparkles, X, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -22,10 +22,9 @@ interface FileUploaderProps {
     token: string;
     backendUrl: string;
   };
-  onResetConfig: () => void;
 }
 
-export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
+export function FileUploader({ config }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -196,19 +195,6 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
 
   return (
     <Card className="w-full shadow-lg relative overflow-hidden border-border animate-in fade-in-50 zoom-in-95 duration-500">
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" className="absolute top-4 right-4 text-muted-foreground z-10 h-8 w-8" onClick={onResetConfig}>
-              <Settings className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Reset Configuration</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
       <CardContent className="p-6">
         {status === 'idle' && (
           <div
