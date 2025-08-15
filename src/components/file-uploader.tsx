@@ -47,27 +47,6 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
     }
   }, []);
   
-  const getFilenamesFromStorage = (): string[] => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const storedFilenames = localStorage.getItem('filedropzone_filenames');
-      return storedFilenames ? JSON.parse(storedFilenames) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const addFilenameToStorage = (newFilename: string) => {
-    if (typeof window === 'undefined') return;
-    try {
-      const existingFilenames = getFilenamesFromStorage();
-      const updatedFilenames = [...new Set([...existingFilenames, newFilename])];
-      localStorage.setItem('filedropzone_filenames', JSON.stringify(updatedFilenames));
-    } catch (e) {
-      console.error("Failed to update filenames in local storage", e);
-    }
-  };
-
   const handleFileSelect = useCallback(async (selectedFile: File) => {
     if (selectedFile) {
       handleReset();
@@ -97,7 +76,7 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
       }
     }
   }, [handleReset, toast]);
-
+  
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
       if (status !== 'idle') return;
@@ -121,6 +100,27 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
       document.removeEventListener('paste', handlePaste);
     };
   }, [status, handleFileSelect]);
+
+  const getFilenamesFromStorage = (): string[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const storedFilenames = localStorage.getItem('filedropzone_filenames');
+      return storedFilenames ? JSON.parse(storedFilenames) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const addFilenameToStorage = (newFilename: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const existingFilenames = getFilenamesFromStorage();
+      const updatedFilenames = [...new Set([...existingFilenames, newFilename])];
+      localStorage.setItem('filedropzone_filenames', JSON.stringify(updatedFilenames));
+    } catch (e) {
+      console.error("Failed to update filenames in local storage", e);
+    }
+  };
 
   const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -199,8 +199,8 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="absolute top-3 right-3 text-muted-foreground z-10" onClick={onResetConfig}>
-              <Settings className="h-5 w-5" />
+            <Button variant="outline" size="icon" className="absolute top-4 right-4 text-muted-foreground z-10 h-8 w-8" onClick={onResetConfig}>
+              <Settings className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
