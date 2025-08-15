@@ -2,20 +2,13 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { suggestFilename } from "@/ai/flows/suggest-filename";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { UploadCloud, File as FileIcon, Sparkles, X, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, File as FileIcon, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 interface FileUploaderProps {
   config: {
@@ -28,7 +21,7 @@ export function FileUploader({ config }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [status, setStatus] = useState<'idle' | 'selected' | 'suggesting' | 'uploading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'selected' | 'uploading' | 'success' | 'error'>('idle');
   const [filename, setFilename] = useState('');
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,35 +39,14 @@ export function FileUploader({ config }: FileUploaderProps) {
     }
   }, []);
   
-  const handleFileSelect = useCallback(async (selectedFile: File) => {
+  const handleFileSelect = useCallback((selectedFile: File) => {
     if (selectedFile) {
       handleReset();
       setFile(selectedFile);
-      setStatus('suggesting');
       setFilename(selectedFile.name);
-
-      try {
-        const existingFilenames = getFilenamesFromStorage().join(', ');
-        const suggestion = await suggestFilename({
-          fileType: selectedFile.type || 'unknown',
-          existingFilenames: existingFilenames,
-        });
-
-        if (suggestion.suggestedFilename) {
-          setFilename(suggestion.suggestedFilename);
-        }
-      } catch (e) {
-        console.error("AI suggestion failed:", e);
-        toast({
-          variant: "destructive",
-          title: "Suggestion Error",
-          description: "Could not get an AI-powered filename suggestion.",
-        });
-      } finally {
-        setStatus('selected');
-      }
+      setStatus('selected');
     }
-  }, [handleReset, toast]);
+  }, [handleReset]);
   
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -99,27 +71,6 @@ export function FileUploader({ config }: FileUploaderProps) {
       document.removeEventListener('paste', handlePaste);
     };
   }, [status, handleFileSelect]);
-
-  const getFilenamesFromStorage = (): string[] => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const storedFilenames = localStorage.getItem('filedropzone_filenames');
-      return storedFilenames ? JSON.parse(storedFilenames) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const addFilenameToStorage = (newFilename: string) => {
-    if (typeof window === 'undefined') return;
-    try {
-      const existingFilenames = getFilenamesFromStorage();
-      const updatedFilenames = [...new Set([...existingFilenames, newFilename])];
-      localStorage.setItem('filedropzone_filenames', JSON.stringify(updatedFilenames));
-    } catch (e) {
-      console.error("Failed to update filenames in local storage", e);
-    }
-  };
 
   const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -176,7 +127,6 @@ export function FileUploader({ config }: FileUploaderProps) {
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         setStatus('success');
-        addFilenameToStorage(filename);
       } else {
         setStatus('error');
         setError(`Upload failed. Server responded with: ${xhr.status} ${xhr.statusText}`);
@@ -234,7 +184,6 @@ export function FileUploader({ config }: FileUploaderProps) {
             
             <div className="space-y-2">
                 <label htmlFor="filename" className="text-sm font-medium flex items-center">
-                    <Sparkles className="w-4 h-4 mr-2 text-primary" />
                     Filename
                 </label>
                 <Input 
@@ -250,13 +199,6 @@ export function FileUploader({ config }: FileUploaderProps) {
                 <Button onClick={handleUpload} className="w-full">
                     Upload File
                 </Button>
-            )}
-
-            {status === 'suggesting' && (
-                <div className="flex items-center text-sm text-muted-foreground">
-                    <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
-                    Getting AI suggestion...
-                </div>
             )}
             
             {status === 'uploading' && (
