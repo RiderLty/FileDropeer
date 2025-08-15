@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { suggestFilename } from "@/ai/flows/suggest-filename";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,30 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
         fileInputRef.current.value = "";
     }
   }, []);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      if (status !== 'idle') return;
+
+      const items = event.clipboardData?.items;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            const blob = items[i].getAsFile();
+            if (blob) {
+              handleFileSelect(blob);
+              break; 
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [status, handleFileSelect]);
   
   const getFilenamesFromStorage = (): string[] => {
     if (typeof window === 'undefined') return [];
@@ -203,7 +227,7 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
               <p className="mb-2 text-lg font-semibold">
                 <span className="text-primary">Click to upload</span> or drag and drop
               </p>
-              <p className="text-xs text-muted-foreground">Your files, your cloud, your way.</p>
+              <p className="text-xs text-muted-foreground">You can also paste an image from your clipboard. Your files, your cloud, your way.</p>
             </div>
             <input ref={fileInputRef} type="file" onChange={onFileChange} className="hidden" />
           </div>
