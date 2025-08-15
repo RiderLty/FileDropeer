@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { UploadCloud, File as FileIcon, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { UploadCloud, File as FileIcon, X, CheckCircle2, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FileUploaderProps {
@@ -17,51 +15,82 @@ interface FileUploaderProps {
   };
 }
 
-export function FileUploader({ config }: FileUploaderProps) {
-  const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [status, setStatus] = useState<'idle' | 'selected' | 'uploading' | 'success' | 'error'>('idle');
-  const [filename, setFilename] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
+interface UploadableFile {
+    id: string;
+    file: File;
+    progress: number;
+    status: 'pending' | 'uploading' | 'success' | 'error';
+    error?: string | null;
+}
 
-  const handleReset = useCallback(() => {
-    setFile(null);
-    setIsDragging(false);
-    setUploadProgress(0);
-    setStatus('idle');
-    setFilename('');
-    setError(null);
-    if(fileInputRef.current) {
-        fileInputRef.current.value = "";
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
+export function FileUploader({ config }: FileUploaderProps) {
+  const [files, setFiles] = useState<UploadableFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = useCallback((uploadableFile: UploadableFile) => {
+    const { id, file } = uploadableFile;
+
+    const setFileStatus = (status: UploadableFile['status'], error?: string | null, progress?: number) => {
+        setFiles(prev => prev.map(f => f.id === id ? { ...f, status, error: error ?? f.error, progress: progress ?? f.progress } : f));
     }
-  }, []);
-  
-  const handleFileSelect = useCallback((selectedFile: File) => {
-    if (selectedFile) {
-      handleReset();
-      setFile(selectedFile);
-      setFilename(selectedFile.name);
-      setStatus('selected');
+
+    setFileStatus('uploading', null, 0);
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        setFileStatus('uploading', null, percentComplete);
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setFileStatus('success', null, 100);
+      } else {
+        setFileStatus('error', `Upload failed. Server responded with: ${xhr.status} ${xhr.statusText}`);
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      setFileStatus('error', 'A network error occurred. Please check your connection.');
+    });
+
+    xhr.open('POST', config.backendUrl, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
+    xhr.send(formData);
+  }, [config]);
+
+  const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
+    if (selectedFiles && selectedFiles.length > 0) {
+        const newUploads: UploadableFile[] = Array.from(selectedFiles).map(file => ({
+            id: generateId(),
+            file,
+            progress: 0,
+            status: 'pending'
+        }));
+
+        setFiles(prev => [...prev, ...newUploads]);
+        newUploads.forEach(handleUpload);
     }
-  }, [handleReset]);
+  }, [handleUpload]);
   
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
-      if (status !== 'idle') return;
-
       const items = event.clipboardData?.items;
       if (items) {
-        for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf('image') !== -1) {
-            const blob = items[i].getAsFile();
-            if (blob) {
-              handleFileSelect(blob);
-              break; 
-            }
-          }
+        const fileItems = Array.from(items).filter(item => item.kind === 'file');
+        if(fileItems.length > 0) {
+            const files = fileItems.map(item => item.getAsFile()).filter(Boolean) as File[];
+            const fileList = new DataTransfer();
+            files.forEach(file => fileList.items.add(file));
+            handleFileSelect(fileList.files);
         }
       }
     };
@@ -70,12 +99,12 @@ export function FileUploader({ config }: FileUploaderProps) {
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, [status, handleFileSelect]);
+  }, [handleFileSelect]);
 
   const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (status !== 'uploading') setIsDragging(true);
+    setIsDragging(true);
   };
 
   const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
@@ -93,141 +122,130 @@ export function FileUploader({ config }: FileUploaderProps) {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    if (status !== 'uploading' && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileSelect(e.dataTransfer.files[0]);
-      e.dataTransfer.clearData();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFileSelect(e.dataTransfer.files);
+        e.dataTransfer.clearData();
     }
   };
   
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFileSelect(e.target.files[0]);
+    handleFileSelect(e.target.files);
+    if(fileInputRef.current) {
+        fileInputRef.current.value = "";
     }
   };
 
-  const handleUpload = () => {
-    if (!file || !filename) return;
-
-    setStatus('uploading');
-    setUploadProgress(0);
-    setError(null);
-
-    const xhr = new XMLHttpRequest();
-    const formData = new FormData();
-    const newFile = new File([file], filename, { type: file.type });
-    formData.append('file', newFile);
-
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        setUploadProgress(percentComplete);
-      }
-    });
-
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setStatus('success');
-      } else {
-        setStatus('error');
-        setError(`Upload failed. Server responded with: ${xhr.status} ${xhr.statusText}`);
-      }
-    });
-
-    xhr.addEventListener('error', () => {
-      setStatus('error');
-      setError('A network error occurred. Please check your connection and try again.');
-    });
-
-    xhr.open('POST', config.backendUrl, true);
-    xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
-    xhr.send(formData);
+  const removeFile = (id: string) => {
+    setFiles(prev => prev.filter(f => f.id !== id));
   };
+  
+  const clearCompleted = () => {
+    setFiles(prev => prev.filter(f => f.status !== 'success'));
+  }
+
+  const uploadingFiles = files.filter(f => f.status === 'uploading');
+  const finishedFiles = files.filter(f => f.status === 'success' || f.status === 'error');
 
   return (
     <Card className="w-full shadow-lg relative overflow-hidden border-border animate-in fade-in-50 zoom-in-95 duration-500">
-      <CardContent className="p-6">
-        {status === 'idle' && (
-          <div
+      <CardContent className="p-6 space-y-4">
+        <div
             onDragEnter={onDragEnter}
             onDragLeave={onDragLeave}
             onDragOver={onDragOver}
             onDrop={onDrop}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              "flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-300",
+              "flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-300",
               isDragging ? "border-primary bg-secondary" : "border-border hover:border-primary/50 hover:bg-muted"
             )}
-          >
+        >
             <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-              <UploadCloud className={cn("w-12 h-12 mb-4 transition-colors", isDragging ? "text-primary" : "text-muted-foreground")} />
-              <p className="mb-2 text-lg font-semibold">
+              <UploadCloud className={cn("w-10 h-10 mb-3 transition-colors", isDragging ? "text-primary" : "text-muted-foreground")} />
+              <p className="mb-2 text-md font-semibold">
                 <span className="text-primary">Click to upload</span> or drag and drop
               </p>
-              <p className="text-xs text-muted-foreground">You can also paste an image from your clipboard. Your files, your cloud, your way.</p>
+              <p className="text-xs text-muted-foreground">You can also paste images from your clipboard.</p>
             </div>
-            <input ref={fileInputRef} type="file" onChange={onFileChange} className="hidden" />
-          </div>
+            <input ref={fileInputRef} type="file" onChange={onFileChange} className="hidden" multiple />
+        </div>
+        
+        {files.length > 0 && (
+            <div className="space-y-4">
+                {uploadingFiles.length > 0 && (
+                     <div className="space-y-2">
+                        <h3 className="text-lg font-medium">Uploading...</h3>
+                        {uploadingFiles.map(upload => (
+                            <FileProgress key={upload.id} file={upload} onRemove={removeFile} />
+                        ))}
+                    </div>
+                )}
+
+                {finishedFiles.length > 0 && (
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                             <h3 className="text-lg font-medium">Completed</h3>
+                             <Button variant="ghost" size="sm" onClick={clearCompleted}>
+                                 <Trash2 className="mr-2 h-4 w-4" />
+                                 Clear All
+                             </Button>
+                        </div>
+                        <ScrollArea className="h-40 w-full pr-4">
+                            <div className="space-y-2">
+                                {finishedFiles.map(upload => (
+                                    <FileProgress key={upload.id} file={upload} onRemove={removeFile} onRetry={() => handleUpload(upload)} />
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </div>
+                )}
+            </div>
         )}
 
-        {status !== 'idle' && file && (
-          <div className="space-y-4 animate-in fade-in-0 duration-300">
-            <div className="flex items-center p-4 border rounded-lg bg-muted/30">
-              <FileIcon className="h-10 w-10 text-primary mr-4 flex-shrink-0" />
-              <div className="flex-grow overflow-hidden">
-                <p className="text-sm font-medium text-foreground truncate" title={file.name}>{file.name}</p>
-                <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={handleReset} className="ml-4 flex-shrink-0" disabled={status === 'uploading'}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="space-y-2">
-                <label htmlFor="filename" className="text-sm font-medium flex items-center">
-                    Filename
-                </label>
-                <Input 
-                    id="filename"
-                    value={filename}
-                    onChange={(e) => setFilename(e.target.value)}
-                    disabled={status === 'uploading' || status === 'success'}
-                    className="font-mono"
-                />
-            </div>
-
-            {status === 'selected' && (
-                <Button onClick={handleUpload} className="w-full">
-                    Upload File
-                </Button>
-            )}
-            
-            {status === 'uploading' && (
-              <div className="space-y-2">
-                <p className="text-sm text-center text-muted-foreground">{uploadProgress}%</p>
-                <Progress value={uploadProgress} className="w-full" />
-              </div>
-            )}
-
-            {status === 'success' && (
-              <Alert>
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Upload Complete!</AlertTitle>
-                <AlertDescription>Your file has been successfully uploaded.</AlertDescription>
-                <Button onClick={handleReset} variant="outline" className="w-full mt-4">Upload Another File</Button>
-              </Alert>
-            )}
-
-            {status === 'error' && error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Upload Failed</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-                <Button onClick={handleReset} variant="outline" className="w-full mt-4">Try Again</Button>
-              </Alert>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   );
+}
+
+
+function FileProgress({ file, onRemove, onRetry }: { file: UploadableFile, onRemove: (id: string) => void, onRetry?: () => void }) {
+    const { id, status, progress, error } = file;
+    const { name, size } = file.file;
+    const isUploading = status === 'uploading';
+    const isError = status === 'error';
+    const isSuccess = status === 'success';
+
+    return (
+        <div className="flex items-center p-3 border rounded-lg bg-muted/30 space-x-4">
+            {isSuccess && <CheckCircle2 className="h-8 w-8 text-green-500 flex-shrink-0" />}
+            {isError && <AlertCircle className="h-8 w-8 text-destructive flex-shrink-0" />}
+            {!isSuccess && !isError && <FileIcon className="h-8 w-8 text-primary flex-shrink-0" />}
+            
+            <div className="flex-grow overflow-hidden">
+                <p className="text-sm font-medium text-foreground truncate" title={name}>{name}</p>
+                <p className="text-xs text-muted-foreground">{(size / 1024 / 1024).toFixed(2)} MB</p>
+                
+                {isUploading && (
+                    <div className="flex items-center gap-2 mt-1">
+                        <Progress value={progress} className="w-full h-2" />
+                        <span className="text-xs text-muted-foreground">{progress}%</span>
+                    </div>
+                )}
+                {isError && (
+                    <p className="text-xs text-destructive mt-1 truncate" title={error || 'Unknown error'}>{error || 'Unknown error'}</p>
+                )}
+            </div>
+
+            <div className="flex-shrink-0">
+                {isError && onRetry && (
+                    <Button variant="ghost" size="icon" onClick={onRetry} className="h-8 w-8">
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={() => onRemove(id)} className="h-8 w-8" disabled={isUploading}>
+                    <X className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    )
 }
