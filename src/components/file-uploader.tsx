@@ -46,30 +46,6 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
         fileInputRef.current.value = "";
     }
   }, []);
-
-  useEffect(() => {
-    const handlePaste = (event: ClipboardEvent) => {
-      if (status !== 'idle') return;
-
-      const items = event.clipboardData?.items;
-      if (items) {
-        for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf('image') !== -1) {
-            const blob = items[i].getAsFile();
-            if (blob) {
-              handleFileSelect(blob);
-              break; 
-            }
-          }
-        }
-      }
-    };
-
-    document.addEventListener('paste', handlePaste);
-    return () => {
-      document.removeEventListener('paste', handlePaste);
-    };
-  }, [status, handleFileSelect]);
   
   const getFilenamesFromStorage = (): string[] => {
     if (typeof window === 'undefined') return [];
@@ -121,6 +97,30 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
       }
     }
   }, [handleReset, toast]);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      if (status !== 'idle') return;
+
+      const items = event.clipboardData?.items;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            const blob = items[i].getAsFile();
+            if (blob) {
+              handleFileSelect(blob);
+              break; 
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [status, handleFileSelect]);
 
   const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
