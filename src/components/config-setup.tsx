@@ -41,7 +41,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
   }
 
   return (
-    <Card className="w-full shadow-lg border-primary/20 animate-in fade-in-50 zoom-in-95 duration-500">
+    <Card className="w-full shadow-lg border-border animate-in fade-in-50 zoom-in-95 duration-500">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Initial Setup</CardTitle>
         <CardDescription>
@@ -83,7 +83,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+            <Button type="submit" className="w-full">
               Save Configuration
             </Button>
           </form>

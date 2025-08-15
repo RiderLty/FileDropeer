@@ -171,7 +171,7 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
   };
 
   return (
-    <Card className="w-full shadow-lg relative overflow-hidden border-primary/20 animate-in fade-in-50 zoom-in-95 duration-500">
+    <Card className="w-full shadow-lg relative overflow-hidden border-border animate-in fade-in-50 zoom-in-95 duration-500">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -195,7 +195,7 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
             onClick={() => fileInputRef.current?.click()}
             className={cn(
               "flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-300",
-              isDragging ? "border-primary bg-primary/10" : "border-border hover:border-primary/50 hover:bg-muted/50"
+              isDragging ? "border-primary bg-secondary" : "border-border hover:border-primary/50 hover:bg-muted"
             )}
           >
             <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
@@ -237,7 +237,7 @@ export function FileUploader({ config, onResetConfig }: FileUploaderProps) {
             </div>
 
             {status === 'selected' && (
-                <Button onClick={handleUpload} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                <Button onClick={handleUpload} className="w-full">
                     Upload File
                 </Button>
             )}
