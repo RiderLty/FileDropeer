@@ -64,6 +64,7 @@ export function FileUploader({ config }: FileUploaderProps) {
 
     xhr.open('POST', config.backendUrl, true);
     xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
+    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
     xhr.send(formData);
   }, [config]);
 
