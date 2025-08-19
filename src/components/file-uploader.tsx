@@ -141,7 +141,7 @@ export function FileUploader({ config }: FileUploaderProps) {
   };
   
   const clearCompleted = () => {
-    setFiles(prev => prev.filter(f => f.status !== 'success'));
+    setFiles(prev => prev.filter(f => f.status !== 'success' && f.status !== 'error'));
   }
 
   const uploadingFiles = files.filter(f => f.status === 'uploading');
