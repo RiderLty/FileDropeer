@@ -7,6 +7,7 @@ import { FileUploader } from "@/components/file-uploader";
 import { Button } from '@/components/ui/button';
 import { Settings } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from "@/hooks/use-toast";
 
 
 type Config = {
@@ -17,17 +18,29 @@ type Config = {
 export default function Home() {
   const [config, setConfig] = useState<Config | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [isUrlConfigured, setIsUrlConfigured] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     setIsClient(true);
-    try {
-      const storedToken = localStorage.getItem('apiToken');
-      const storedUrl = localStorage.getItem('backendUrl');
-      if (storedToken && storedUrl) {
-        setConfig({ token: storedToken, backendUrl: storedUrl });
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    const urlBackend = urlParams.get('backendUrl');
+
+    if (urlToken && urlBackend) {
+      setConfig({ token: urlToken, backendUrl: urlBackend });
+      setIsUrlConfigured(true);
+    } else {
+      try {
+        const storedToken = localStorage.getItem('apiToken');
+        const storedUrl = localStorage.getItem('backendUrl');
+        if (storedToken && storedUrl) {
+          setConfig({ token: storedToken, backendUrl: storedUrl });
+        }
+      } catch (error) {
+        console.error("Failed to read from local storage", error);
       }
-    } catch (error) {
-      console.error("Failed to read from local storage", error);
     }
   }, []);
 
@@ -42,6 +55,15 @@ export default function Home() {
   };
   
   const handleResetConfig = () => {
+    if (isUrlConfigured) {
+      toast({
+        title: "Configuration Locked",
+        description: "Configuration is provided by URL parameters and cannot be changed.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       localStorage.removeItem('apiToken');
       localStorage.removeItem('backendUrl');
