@@ -40,8 +40,6 @@ export function FileUploader({ config }: FileUploaderProps) {
     setFileStatus('uploading', null, 0);
 
     const xhr = new XMLHttpRequest();
-    const formData = new FormData();
-    formData.append('file', file, file.name);
 
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
@@ -65,7 +63,8 @@ export function FileUploader({ config }: FileUploaderProps) {
     xhr.open('POST', config.backendUrl, true);
     xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
     xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    xhr.send(formData);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.send(file);
   }, [config]);
 
   const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
@@ -144,7 +143,7 @@ export function FileUploader({ config }: FileUploaderProps) {
     setFiles(prev => prev.filter(f => f.status !== 'success' && f.status !== 'error'));
   }
 
-  const uploadingFiles = files.filter(f => f.status === 'uploading');
+  const uploadingFiles = files.filter(f => f.status === 'uploading' || f.status === 'pending');
   const finishedFiles = files.filter(f => f.status === 'success' || f.status === 'error');
 
   return (
@@ -212,7 +211,7 @@ export function FileUploader({ config }: FileUploaderProps) {
 function FileProgress({ file, onRemove, onRetry }: { file: UploadableFile, onRemove: (id: string) => void, onRetry?: () => void }) {
     const { id, status, progress, error } = file;
     const { name, size } = file.file;
-    const isUploading = status === 'uploading';
+    const isUploading = status === 'uploading' || status === 'pending';
     const isError = status === 'error';
     const isSuccess = status === 'success';
 
@@ -226,12 +225,13 @@ function FileProgress({ file, onRemove, onRetry }: { file: UploadableFile, onRem
                 <p className="text-sm font-medium text-foreground truncate" title={name}>{name}</p>
                 <p className="text-xs text-muted-foreground">{(size / 1024 / 1024).toFixed(2)} MB</p>
                 
-                {isUploading && (
+                {isUploading && status !== 'pending' && (
                     <div className="flex items-center gap-2 mt-1">
                         <Progress value={progress} className="w-full h-2" />
                         <span className="text-xs text-muted-foreground">{progress}%</span>
                     </div>
                 )}
+                {status === 'pending' && <p className="text-xs text-muted-foreground mt-1">Waiting to upload...</p>}
                 {isError && (
                     <p className="text-xs text-destructive mt-1 truncate" title={error || 'Unknown error'}>{error || 'Unknown error'}</p>
                 )}
@@ -243,7 +243,7 @@ function FileProgress({ file, onRemove, onRetry }: { file: UploadableFile, onRem
                         <RefreshCw className="h-4 w-4" />
                     </Button>
                 )}
-                <Button variant="ghost" size="icon" onClick={() => onRemove(id)} className="h-8 w-8" disabled={isUploading}>
+                <Button variant="ghost" size="icon" onClick={() => onRemove(id)} className="h-8 w-8" disabled={isUploading && status !== 'pending'}>
                     <X className="h-4 w-4" />
                 </Button>
             </div>
