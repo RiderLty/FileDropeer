@@ -2,8 +2,8 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   output: 'export',
-  basePath: '/FileDropeer',
-  // basePath: '',
+  // basePath: '/FileDropeer',
+  basePath: process.env.PWD === "/home/user/studio" ? "" : "/FileDropeer",
   typescript: {
     ignoreBuildErrors: true,
   },

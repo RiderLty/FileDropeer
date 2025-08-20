@@ -25,16 +25,19 @@ export default function Home() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Set theme at the very beginning
+    const storedTheme = localStorage.getItem('theme');
+    // If no theme is stored, check system preference
+    const initialTheme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(initialTheme);
+    // The inline script in layout.tsx already handles the initial class, but we keep this for reactivity
+    document.documentElement.classList.toggle('dark', initialTheme === 'dark');
+
     setIsClient(true);
     
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     const urlBackend = urlParams.get('backendUrl');
-    
-    const storedTheme = localStorage.getItem('theme');
-    const initialTheme = storedTheme || 'dark';
-    setTheme(initialTheme);
-    document.documentElement.classList.toggle('dark', initialTheme === 'dark');
 
     if (urlToken && urlBackend) {
       setConfig({ token: urlToken, backendUrl: urlBackend });
