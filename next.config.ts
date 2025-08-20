@@ -2,7 +2,8 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   output: 'export',
-  basePath: '/FileDropeer',
+  // basePath: '/FileDropeer',
+  basePath: '',
   typescript: {
     ignoreBuildErrors: true,
   },

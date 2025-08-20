@@ -126,14 +126,14 @@ export default function Home() {
                 </Tooltip>
               </TooltipProvider>
             )}
-            <div className="flex items-center space-x-2 ml-2">
-              <Sun className="h-4 w-4" />
+            <div className="flex items-center space-x-2 ml-4">
               <Switch
                 id="theme-switch"
                 checked={theme === 'dark'}
                 onCheckedChange={handleThemeChange}
-              />
-              <Moon className="h-4 w-4" />
+              >
+                {theme === 'dark' ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
+              </Switch>
             </div>
           </div>
         </header>
