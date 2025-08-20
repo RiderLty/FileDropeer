@@ -28,10 +28,11 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
-manager = ConnectionManager()
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    manager = ConnectionManager()
     await manager.connect(websocket)
     
     file_path = None

@@ -5,9 +5,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { ConfigSetup } from "@/components/config-setup";
 import { FileUploader } from "@/components/file-uploader";
 import { Button } from '@/components/ui/button';
-import { Settings } from 'lucide-react';
+import { Settings, Moon, Sun } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 
 type Config = {
@@ -19,6 +21,7 @@ export default function Home() {
   const [config, setConfig] = useState<Config | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [isUrlConfigured, setIsUrlConfigured] = useState(false);
+  const [theme, setTheme] = useState('dark');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -27,6 +30,11 @@ export default function Home() {
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     const urlBackend = urlParams.get('backendUrl');
+    
+    const storedTheme = localStorage.getItem('theme');
+    const initialTheme = storedTheme || 'dark';
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle('dark', initialTheme === 'dark');
 
     if (urlToken && urlBackend) {
       setConfig({ token: urlToken, backendUrl: urlBackend });
@@ -43,6 +51,17 @@ export default function Home() {
       }
     }
   }, []);
+
+  const handleThemeChange = (isDark: boolean) => {
+    const newTheme = isDark ? 'dark' : 'light';
+    setTheme(newTheme);
+    document.documentElement.classList.toggle('dark', isDark);
+    try {
+      localStorage.setItem('theme', newTheme);
+    } catch (error) {
+      console.error("Failed to save theme to local storage", error);
+    }
+  };
 
   const handleConfigured = (newConfig: Config) => {
     try {
@@ -107,6 +126,15 @@ export default function Home() {
                 </Tooltip>
               </TooltipProvider>
             )}
+            <div className="flex items-center space-x-2 ml-2">
+              <Sun className="h-4 w-4" />
+              <Switch
+                id="theme-switch"
+                checked={theme === 'dark'}
+                onCheckedChange={handleThemeChange}
+              />
+              <Moon className="h-4 w-4" />
+            </div>
           </div>
         </header>
         
