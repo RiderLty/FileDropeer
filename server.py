@@ -37,14 +37,23 @@ async def websocket_endpoint(websocket: WebSocket):
     file_writer = None
     remaining_bytes = 0
     state = "AUTH_PENDING" # Initial state
+    challenge_code = ""
 
     try:
         # 1. Challenge-Response Authentication
-        challenge = str(uuid.uuid4())
-        await websocket.send_text(f"challenge:{challenge}")
+        challenge_code = str(uuid.uuid4())
+        await websocket.send_text(f"challenge:{challenge_code}")
         
-        auth_response = await websocket.receive_text()
-        if not auth_response.startswith("Bearer ") or auth_response.split(" ")[1] != VALID_TOKEN:
+        auth_message = await websocket.receive_text()
+        if not auth_message.startswith("auth:"):
+            await websocket.close(code=4001, reason="Invalid auth message format")
+            return
+            
+        client_response = auth_message.substring("auth:".length)
+        # In a real app, use a more secure method like HMAC-SHA256
+        expected_response = f"{challenge_code}:{VALID_TOKEN}"
+        
+        if client_response != expected_response:
             error_message = "Error: Authentication failed"
             print(error_message)
             await websocket.send_text("auth_error:Invalid token")

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -42,13 +43,19 @@ export function FileUploader({ config }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const setFileState = useCallback((id: string, state: Partial<UploadableFile>) => {
-      setFiles(prev => prev.map(f => f.id === id ? { ...f, ...state } : f));
+  const setFileState = useCallback((id: string, update: Partial<UploadableFile> | ((currentState: UploadableFile) => Partial<UploadableFile>)) => {
+      setFiles(prev => prev.map(f => {
+          if (f.id === id) {
+              const changes = typeof update === 'function' ? update(f) : update;
+              return { ...f, ...changes };
+          }
+          return f;
+      }));
   }, []);
 
   const handleUpload = useCallback(async (uploadableFile: UploadableFile) => {
     const { id, file } = uploadableFile;
-    setFileState(id, { status: 'connecting', progress: 0 });
+    setFileState(id, { status: 'connecting', progress: 0, error: null });
 
     let ws: WebSocket;
     try {
@@ -100,7 +107,10 @@ export function FileUploader({ config }: FileUploaderProps) {
 
         if (message.startsWith("challenge:")) {
             setFileState(id, { status: 'authenticating' });
-            ws.send(`Bearer ${config.token}`);
+            const challenge = message.substring("challenge:".length);
+            // In a real app, use a more secure method like HMAC-SHA256
+            const response = `${challenge}:${config.token}`;
+            ws.send(`auth:${response}`);
         } else if (message === "auth_ok") {
             setFileState(id, { status: 'sending_metadata' });
             // 1. Send header first
@@ -374,3 +384,4 @@ function FileProgress({ file, onCancel, onRemove, onRetry }: {
         </div>
     )
 }
+
