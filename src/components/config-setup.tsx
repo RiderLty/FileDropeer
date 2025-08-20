@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { KeyRound, Server } from "lucide-react";
 
 const formSchema = z.object({
-  token: z.string(),
+  token: z.string().min(1, { message: "API Token is required." }),
   backendUrl: z.string().url({ message: "Please enter a valid WebSocket URL (e.g., ws://...)" }).refine(
       (url) => url.startsWith("ws://") || url.startsWith("wss://"),
       { message: "URL must start with ws:// or wss://" }
@@ -34,8 +34,8 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
   const form = useForm<Config>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      token: "in-memory-token",
-      backendUrl: "",
+      token: "",
+      backendUrl: "ws://localhost:8000/ws",
     },
   });
 
@@ -48,7 +48,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Initial Setup</CardTitle>
         <CardDescription>
-          Provide your WebSocket backend URL to start uploading files.
+          Provide your API Token and WebSocket backend URL to start uploading files.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -63,7 +63,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
                   <FormControl>
                     <div className="relative">
                       <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Enter your API token (optional)" {...field} className="pl-10" />
+                      <Input placeholder="Enter your API token" {...field} className="pl-10" />
                     </div>
                   </FormControl>
                   <FormMessage />

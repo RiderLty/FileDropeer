@@ -1,7 +1,8 @@
 import asyncio
 import os
 import struct
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Header
+from typing import Annotated
 import uuid
 
 app = FastAPI()
@@ -11,17 +12,42 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
 
+# This is a dummy token for demonstration purposes.
+# In a real application, this should be stored securely, e.g., in an environment variable.
+VALID_TOKEN = "in-memory-token"
+
+async def get_token(websocket: WebSocket):
+    """Dependency to extract and validate token from the first WebSocket message."""
+    try:
+        # The first message from the client should be the token.
+        message = await websocket.receive_text()
+        if message.startswith("Bearer ") and message.split(" ")[1] == VALID_TOKEN:
+             # Token is valid, we don't need to do anything else.
+             return
+    except Exception:
+        # Handle cases where client disconnects or sends invalid data
+        pass
+    
+    # If we are here, authentication failed.
+    # Send an error message and close the connection.
+    error_message = "Error: Authentication failed"
+    print(error_message)
+    await websocket.send_text(error_message)
+    await websocket.close(code=4001, reason="Authentication failed")
+    return None
+
+
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: Annotated[str, Depends(get_token)]):
     await websocket.accept()
-    print("WebSocket client connected")
+    print("WebSocket client connected and authenticated")
     
     file_path = None
     file_writer = None
     remaining_bytes = 0
 
     try:
-        # First message should be the header
+        # Second message should be the header
         header_data = await websocket.receive_bytes()
 
         # |filename_len (4B)| filename (UTF-8) | content_len (8B)|

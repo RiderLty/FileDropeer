@@ -49,6 +49,9 @@ export function FileUploader({ config }: FileUploaderProps) {
     }
 
     ws.onopen = async () => {
+      // Send auth token as the first message
+      ws.send(`Bearer ${config.token}`);
+
       setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'uploading' } : f));
       
       try {
@@ -99,9 +102,12 @@ export function FileUploader({ config }: FileUploaderProps) {
     };
     
     ws.onmessage = (event) => {
-       // Assuming server sends a success message
-        console.log("Message from server: ", event.data);
-        setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'success', progress: 100 } : f));
+        if (event.data.startsWith("Error: Authentication failed")) {
+             setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'error', error: "Authentication failed. Check your token." } : f));
+        } else {
+            console.log("Message from server: ", event.data);
+            setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'success', progress: 100 } : f));
+        }
         ws.close();
     };
 
