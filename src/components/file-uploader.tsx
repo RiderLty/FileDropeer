@@ -41,7 +41,7 @@ export function FileUploader({ config }: FileUploaderProps) {
 
     let ws: WebSocket;
     try {
-        ws = new WebSocket(config.backendUrl, config.token ? [config.token] : []);
+        ws = new WebSocket(config.backendUrl);
     } catch (error) {
         console.error("Failed to create WebSocket:", error);
         setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'error', error: "Invalid WebSocket URL." } : f));
