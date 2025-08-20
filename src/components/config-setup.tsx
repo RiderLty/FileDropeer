@@ -17,8 +17,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { KeyRound, Server } from "lucide-react";
 
 const formSchema = z.object({
-  token: z.string().min(1, { message: "API Token is required." }),
-  backendUrl: z.string().url({ message: "Please enter a valid URL." }),
+  token: z.string(),
+  backendUrl: z.string().url({ message: "Please enter a valid WebSocket URL (e.g., ws://...)" }).refine(
+      (url) => url.startsWith("ws://") || url.startsWith("wss://"),
+      { message: "URL must start with ws:// or wss://" }
+    ),
 });
 
 type Config = z.infer<typeof formSchema>;
@@ -31,7 +34,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
   const form = useForm<Config>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      token: "",
+      token: "in-memory-token",
       backendUrl: "",
     },
   });
@@ -45,7 +48,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Initial Setup</CardTitle>
         <CardDescription>
-          Provide your API token and backend URL to start uploading files.
+          Provide your WebSocket backend URL to start uploading files.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -60,7 +63,7 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
                   <FormControl>
                     <div className="relative">
                       <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Enter your API token" type="password" {...field} className="pl-10" />
+                      <Input placeholder="Enter your API token (optional)" {...field} className="pl-10" />
                     </div>
                   </FormControl>
                   <FormMessage />
@@ -72,11 +75,11 @@ export function ConfigSetup({ onConfigured }: ConfigSetupProps) {
               name="backendUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Backend URL</FormLabel>
+                  <FormLabel>WebSocket URL</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="https://your-backend.com/upload" {...field} className="pl-10" />
+                      <Input placeholder="ws://localhost:8000/ws" {...field} className="pl-10" />
                     </div>
                   </FormControl>
                   <FormMessage />

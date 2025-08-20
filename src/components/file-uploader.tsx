@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UploadCloud, File as FileIcon, X, CheckCircle2, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from "@/hooks/use-toast";
 
 interface FileUploaderProps {
   config: {
@@ -29,43 +30,109 @@ export function FileUploader({ config }: FileUploaderProps) {
   const [files, setFiles] = useState<UploadableFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const { toast } = useToast();
 
-  const handleUpload = useCallback((uploadableFile: UploadableFile) => {
+  const getWebSocket = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      return wsRef.current;
+    }
+    
+    try {
+        const ws = new WebSocket(config.backendUrl, config.token ? [config.token] : []);
+        
+        ws.onopen = () => {
+          console.log("WebSocket connection established");
+        };
+        
+        ws.onclose = () => {
+          console.log("WebSocket connection closed");
+          wsRef.current = null;
+        };
+
+        ws.onerror = (event) => {
+          console.error("WebSocket error:", event);
+          toast({
+            title: "WebSocket Connection Error",
+            description: "Could not connect to the server. Please check the URL and server status.",
+            variant: "destructive",
+          });
+          wsRef.current = null;
+        };
+
+        wsRef.current = ws;
+        return ws;
+    } catch (error) {
+        console.error("Failed to create WebSocket:", error);
+         toast({
+            title: "Invalid WebSocket URL",
+            description: "The provided backend URL is not a valid WebSocket address.",
+            variant: "destructive",
+          });
+        return null;
+    }
+  }, [config.backendUrl, config.token, toast]);
+  
+  // Connect on component mount
+  useEffect(() => {
+    getWebSocket();
+    return () => {
+      wsRef.current?.close();
+    }
+  }, [getWebSocket]);
+
+
+  const handleUpload = useCallback(async (uploadableFile: UploadableFile) => {
     const { id, file } = uploadableFile;
-
-    const setFileStatus = (status: UploadableFile['status'], error?: string | null, progress?: number) => {
-        setFiles(prev => prev.map(f => f.id === id ? { ...f, status, error: error ?? f.error, progress: progress ?? f.progress } : f));
+    const ws = getWebSocket();
+    
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'error', error: "WebSocket not connected." } : f));
+      return;
     }
 
-    setFileStatus('uploading', null, 0);
+    setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'uploading', progress: 0 } : f));
 
-    const xhr = new XMLHttpRequest();
+    try {
+      const fileContent = await file.arrayBuffer();
+      const fileNameBytes = new TextEncoder().encode(file.name);
+      
+      // |文件名长度 4bytes int32| 文件名 UTF-8 | 文件内容长度 8bytes int64 | 文件内容 |
+      const headerSize = 4 + fileNameBytes.length + 8;
+      const totalSize = headerSize + fileContent.byteLength;
+      const buffer = new ArrayBuffer(totalSize);
+      const view = new DataView(buffer);
+      
+      let offset = 0;
+      
+      // Filename length (4 bytes)
+      view.setInt32(offset, fileNameBytes.length, false); // big-endian
+      offset += 4;
 
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        setFileStatus('uploading', null, percentComplete);
-      }
-    });
+      // Filename
+      new Uint8Array(buffer, offset, fileNameBytes.length).set(fileNameBytes);
+      offset += fileNameBytes.length;
+      
+      // File content length (8 bytes) - BigInt needed for large files
+      view.setBigInt64(offset, BigInt(fileContent.byteLength), false); // big-endian
+      offset += 8;
+      
+      // File content
+      new Uint8Array(buffer, offset, fileContent.byteLength).set(new Uint8Array(fileContent));
+      
+      ws.send(buffer);
+      
+      // Since WebSocket doesn't have progress events for sending, we'll just mark it as complete
+      // A more complex implementation could involve chunking and acknowledgements.
+      setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'success', progress: 100 } : f));
 
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setFileStatus('success', null, 100);
-      } else {
-        setFileStatus('error', `Upload failed. Server responded with: ${xhr.status} ${xhr.statusText}`);
-      }
-    });
+    } catch (error) {
+      console.error('Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'error', error: errorMessage } : f));
+    }
 
-    xhr.addEventListener('error', () => {
-      setFileStatus('error', 'A network error occurred. Please check your connection.');
-    });
-
-    xhr.open('POST', config.backendUrl, true);
-    xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
-    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-    xhr.send(file);
-  }, [config]);
+  }, [getWebSocket]);
 
   const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
     if (selectedFiles && selectedFiles.length > 0) {
@@ -226,12 +293,10 @@ function FileProgress({ file, onRemove, onRetry }: { file: UploadableFile, onRem
                 <p className="text-xs text-muted-foreground">{(size / 1024 / 1024).toFixed(2)} MB</p>
                 
                 {isUploading && status !== 'pending' && (
-                    <div className="flex items-center gap-2 mt-1">
-                        <Progress value={progress} className="w-full h-2" />
-                        <span className="text-xs text-muted-foreground">{progress}%</span>
-                    </div>
+                     <p className="text-xs text-muted-foreground mt-1">Sending via WebSocket...</p>
                 )}
                 {status === 'pending' && <p className="text-xs text-muted-foreground mt-1">Waiting to upload...</p>}
+                {isSuccess && <p className="text-xs text-green-600 mt-1">Upload complete.</p>}
                 {isError && (
                     <p className="text-xs text-destructive mt-1 truncate" title={error || 'Unknown error'}>{error || 'Unknown error'}</p>
                 )}
