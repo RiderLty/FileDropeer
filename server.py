@@ -1,6 +1,7 @@
 import asyncio
 import os
 import struct
+import hashlib
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import Annotated
 import uuid
@@ -49,11 +50,13 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close(code=4001, reason="Invalid auth message format")
             return
             
-        client_response = auth_message.substring("auth:".length)
-        # In a real app, use a more secure method like HMAC-SHA256
-        expected_response = f"{challenge_code}:{VALID_TOKEN}"
+        client_response_hash = auth_message[len("auth:"):]
         
-        if client_response != expected_response:
+        # Calculate the expected hash on the server side
+        expected_response_str = f"{challenge_code}:{VALID_TOKEN}"
+        expected_response_hash = hashlib.sha256(expected_response_str.encode()).hexdigest()
+        
+        if client_response_hash != expected_response_hash:
             error_message = "Error: Authentication failed"
             print(error_message)
             await websocket.send_text("auth_error:Invalid token")
@@ -145,3 +148,5 @@ if __name__ == "__main__":
     import uvicorn
     print("Starting FastAPI server...")
     uvicorn.run(app, host="0.0.0.0", port=8000, ws_max_size=CHUNK_SIZE * 2)
+
+    

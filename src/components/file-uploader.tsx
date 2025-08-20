@@ -38,6 +38,14 @@ interface UploadableFile {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
 
+async function sha256(message: string): Promise<string> {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
+
 export function FileUploader({ config }: FileUploaderProps) {
   const [files, setFiles] = useState<UploadableFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -101,15 +109,14 @@ export function FileUploader({ config }: FileUploaderProps) {
       // The server will send a challenge, see onmessage.
     };
     
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
         const message = event.data as string;
         console.log(`Received: ${message}`);
 
         if (message.startsWith("challenge:")) {
             setFileState(id, { status: 'authenticating' });
             const challenge = message.substring("challenge:".length);
-            // In a real app, use a more secure method like HMAC-SHA256
-            const response = `${challenge}:${config.token}`;
+            const response = await sha256(`${challenge}:${config.token}`);
             ws.send(`auth:${response}`);
         } else if (message === "auth_ok") {
             setFileState(id, { status: 'sending_metadata' });
@@ -385,3 +392,4 @@ function FileProgress({ file, onCancel, onRemove, onRetry }: {
     )
 }
 
+    
