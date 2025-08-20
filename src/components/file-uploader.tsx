@@ -37,6 +37,7 @@ interface UploadableFile {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
+const MAX_CONCURRENT_UPLOADS = 8;
 
 async function sha256(message: string): Promise<string> {
     const msgBuffer = new TextEncoder().encode(message);
@@ -165,6 +166,17 @@ export function FileUploader({ config }: FileUploaderProps) {
     };
 
   }, [config.backendUrl, config.token, setFileState]);
+  
+    useEffect(() => {
+        const activeUploads = files.filter(f => ['connecting', 'authenticating', 'sending_metadata', 'uploading'].includes(f.status)).length;
+        const pendingFiles = files.filter(f => f.status === 'pending');
+
+        if (activeUploads < MAX_CONCURRENT_UPLOADS && pendingFiles.length > 0) {
+            const filesToStart = pendingFiles.slice(0, MAX_CONCURRENT_UPLOADS - activeUploads);
+            filesToStart.forEach(file => handleUpload(file));
+        }
+    }, [files, handleUpload]);
+
 
   const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
     if (selectedFiles && selectedFiles.length > 0) {
@@ -176,9 +188,8 @@ export function FileUploader({ config }: FileUploaderProps) {
         }));
 
         setFiles(prev => [...prev, ...newUploads]);
-        newUploads.forEach(handleUpload);
     }
-  }, [handleUpload]);
+  }, []);
   
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -248,12 +259,15 @@ export function FileUploader({ config }: FileUploaderProps) {
     setFiles(prev => prev.filter(f => f.id !== id));
   }
   
-  const clearCompleted = () => {
-    setFiles(prev => prev.filter(f => f.status !== 'success' && f.status !== 'error'));
+  const clearAll = () => {
+    // We only want to keep pending and uploading files
+    const filesToKeep = files.filter(f => f.status === 'pending' || f.status === 'uploading' || f.status === 'connecting' || f.status === 'authenticating' || f.status === 'sending_metadata');
+    setFiles(filesToKeep);
   }
 
-  const uploadingFiles = files.filter(f => f.status !== 'success' && f.status !== 'error');
-  const finishedFiles = files.filter(f => f.status === 'success' || f.status === 'error');
+  const uploadingFiles = files.filter(f => ['pending', 'connecting', 'authenticating', 'sending_metadata', 'uploading'].includes(f.status));
+  const errorFiles = files.filter(f => f.status === 'error');
+  const successFiles = files.filter(f => f.status === 'success');
 
   return (
     <Card className="w-full shadow-lg relative overflow-hidden border-border animate-in fade-in-50 zoom-in-95 duration-500">
@@ -289,23 +303,32 @@ export function FileUploader({ config }: FileUploaderProps) {
                         ))}
                     </div>
                 )}
+                
+                {errorFiles.length > 0 && (
+                     <div className="space-y-2">
+                        <h3 className="text-lg font-medium text-destructive">Error</h3>
+                        {errorFiles.map(upload => (
+                             <FileProgress key={upload.id} file={upload} onRemove={removeFile} onRetry={() => handleUpload({ ...upload, status: 'pending' })} />
+                        ))}
+                    </div>
+                )}
 
-                {finishedFiles.length > 0 && (
+                {successFiles.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                             <h3 className="text-lg font-medium">Completed</h3>
-                             <Button variant="ghost" size="sm" onClick={clearCompleted}>
-                                 <Trash2 className="mr-2 h-4 w-4" />
-                                 Clear All
-                             </Button>
+                             <h3 className="text-lg font-medium text-green-600">Completed</h3>
+                             {(errorFiles.length > 0 || successFiles.length > 0) && (
+                                <Button variant="ghost" size="sm" onClick={clearAll}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Clear All
+                                </Button>
+                             )}
                         </div>
-                        <ScrollArea className="h-40 w-full pr-4">
-                            <div className="space-y-2">
-                                {finishedFiles.map(upload => (
-                                    <FileProgress key={upload.id} file={upload} onRemove={removeFile} onRetry={() => handleUpload(upload)} />
-                                ))}
-                            </div>
-                        </ScrollArea>
+                        <div className="space-y-2">
+                            {successFiles.map(upload => (
+                                <FileProgress key={upload.id} file={upload} onRemove={removeFile} />
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
@@ -325,7 +348,7 @@ function FileProgress({ file, onCancel, onRemove, onRetry }: {
 }) {
     const { id, status, progress, error } = file;
     const { name, size } = file.file;
-    const isProcessing = status !== 'success' && status !== 'error';
+    const isProcessing = ['pending', 'connecting', 'authenticating', 'sending_metadata', 'uploading'].includes(status);
     const isError = status === 'error';
     const isSuccess = status === 'success';
 
@@ -346,7 +369,7 @@ function FileProgress({ file, onCancel, onRemove, onRetry }: {
         <div className="flex items-center p-3 border rounded-lg bg-muted/30 space-x-4">
             {isSuccess && <CheckCircle2 className="h-8 w-8 text-green-500 flex-shrink-0" />}
             {isError && <AlertCircle className="h-8 w-8 text-destructive flex-shrink-0" />}
-            {!isSuccess && !isError && <FileIcon className="h-8 w-8 text-primary flex-shrink-0" />}
+            {isProcessing && <FileIcon className="h-8 w-8 text-primary flex-shrink-0" />}
             
             <div className="flex-grow overflow-hidden">
                 <p className="text-sm font-medium text-foreground truncate" title={name}>{name}</p>
@@ -355,7 +378,7 @@ function FileProgress({ file, onCancel, onRemove, onRetry }: {
                     <p className={cn("text-xs mt-1 truncate", 
                         isSuccess && 'text-green-600', 
                         isError && 'text-destructive',
-                        !isSuccess && !isError && 'text-muted-foreground'
+                        isProcessing && 'text-muted-foreground'
                     )} title={error || ''}>
                         {getStatusText()}
                     </p>
