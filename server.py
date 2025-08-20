@@ -2,82 +2,96 @@ import asyncio
 import os
 import struct
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import uuid
 
 app = FastAPI()
 
-# Create an 'uploads' directory if it doesn't exist
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket client connected")
+    
+    file_path = None
+    file_writer = None
+    remaining_bytes = 0
+
     try:
-        while True:
-            # Receive the raw binary data
-            data = await websocket.receive_bytes()
-            
-            # |filename_len (4B)| filename (UTF-8) | content_len (8B) | content |
-            
-            if len(data) < 12:
-                print(f"Error: Received data is too short to be a valid file message ({len(data)} bytes)")
-                continue
+        # First message should be the header
+        header_data = await websocket.receive_bytes()
 
-            offset = 0
-            
-            # 1. Read filename length (4 bytes, big-endian integer)
-            filename_len = struct.unpack('!I', data[offset:offset+4])[0]
-            offset += 4
-            
-            if len(data) < offset + filename_len:
-                print(f"Error: Invalid filename length. Expecting {filename_len} bytes for filename, but not enough data.")
-                continue
-                
-            # 2. Read filename (UTF-8)
-            filename_bytes = data[offset:offset+filename_len]
-            filename = filename_bytes.decode('utf-8')
-            offset += filename_len
-            
-            if len(data) < offset + 8:
-                print("Error: Not enough data for file content length.")
-                continue
+        # |filename_len (4B)| filename (UTF-8) | content_len (8B)|
+        if len(header_data) < 12:
+            print(f"Error: Header data is too short ({len(header_data)} bytes)")
+            await websocket.close(code=1003, reason="Invalid header")
+            return
 
-            # 3. Read file content length (8 bytes, big-endian long long)
-            content_len = struct.unpack('!Q', data[offset:offset+8])[0]
-            offset += 8
+        offset = 0
+        filename_len = struct.unpack('!I', header_data[offset:offset+4])[0]
+        offset += 4
+
+        if len(header_data) < offset + filename_len + 8:
+            print(f"Error: Invalid header format.")
+            await websocket.close(code=1003, reason="Invalid header format")
+            return
+
+        filename = header_data[offset:offset+filename_len].decode('utf-8')
+        offset += filename_len
+
+        content_len = struct.unpack('!Q', header_data[offset:offset+8])[0]
+        remaining_bytes = content_len
+
+        sanitized_filename = os.path.basename(filename)
+        # To handle multiple uploads of the same filename concurrently
+        unique_filename = f"{uuid.uuid4().hex}-{sanitized_filename}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        print(f"Receiving file: {sanitized_filename} ({content_len} bytes) -> {file_path}")
+
+        file_writer = open(file_path, "wb")
+
+        while remaining_bytes > 0:
+            chunk = await websocket.receive_bytes()
+            if not chunk:
+                # This might happen if client disconnects abruptly
+                break
             
-            # 4. Read file content
-            content = data[offset:]
+            file_writer.write(chunk)
+            remaining_bytes -= len(chunk)
+        
+        if remaining_bytes == 0:
+            print(f"Successfully received and saved file: {file_path}")
+            await websocket.send_text(f"File '{filename}' received successfully.")
+        else:
+             print(f"Error: File transmission incomplete. Missing {remaining_bytes} bytes.")
+             await websocket.send_text(f"Error: File transmission for '{filename}' was incomplete.")
 
-            if len(content) != content_len:
-                print(f"Error: Mismatch in file content length. Expected {content_len}, got {len(content)}")
-                continue
-
-            # Sanitize filename to prevent directory traversal
-            sanitized_filename = os.path.basename(filename)
-            file_path = os.path.join(UPLOAD_DIR, sanitized_filename)
-
-            # Save the file
-            try:
-                with open(file_path, "wb") as f:
-                    f.write(content)
-                print(f"Successfully received and saved file: {file_path} ({len(content)} bytes)")
-                # Optional: send a confirmation back to the client
-                await websocket.send_text(f"File '{filename}' received successfully.")
-            except IOError as e:
-                print(f"Error saving file '{filename}': {e}")
-                await websocket.send_text(f"Error saving file '{filename}'.")
 
     except WebSocketDisconnect:
         print("WebSocket client disconnected")
     except Exception as e:
         print(f"An error occurred: {e}")
+        # Try to send an error message if the socket is still open
+        if not websocket.client_state.DISCONNECTED:
+             await websocket.send_text(f"An error occurred: {e}")
     finally:
-        await websocket.close()
+        if file_writer:
+            file_writer.close()
+            # If the upload was not successful, clean up the partial file
+            if remaining_bytes > 0 and file_path and os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Removed incomplete file: {file_path}")
+
+        # It's good practice to ensure the websocket is closed.
+        if not websocket.client_state.DISCONNECTED:
+            await websocket.close()
         print("WebSocket connection closed")
 
 if __name__ == "__main__":
     import uvicorn
     print("Starting FastAPI server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, ws_max_size=CHUNK_SIZE * 2)
