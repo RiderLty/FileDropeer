@@ -80,7 +80,7 @@ export default function Home() {
     if (isUrlConfigured) {
       toast({
         title: "Configuration Locked",
-        description: "Configuration is provided by URL parameters and cannot be changed.",
+        description: "Configuration is locked by URL parameters.",
         variant: "destructive",
       });
       return;
