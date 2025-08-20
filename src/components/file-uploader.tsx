@@ -5,10 +5,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { UploadCloud, File as FileIcon, X, CheckCircle2, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useToast } from "@/hooks/use-toast";
 
 interface FileUploaderProps {
   config: {
@@ -71,7 +69,7 @@ export function FileUploader({ config }: FileUploaderProps) {
         ws = new WebSocket(config.backendUrl);
     } catch (error) {
         console.error("Failed to create WebSocket:", error);
-        setFileState(id, { status: 'error', error: "Invalid WebSocket URL." });
+        setFileState(id, { status: 'error', error: "Invalid URL" });
         return;
     }
 
@@ -136,30 +134,30 @@ export function FileUploader({ config }: FileUploaderProps) {
             setFileState(id, { status: 'success', progress: 100 });
             ws.close();
         } else if (message.startsWith("auth_error:")) {
-            setFileState(id, { status: 'error', error: `Auth failed: ${message.split(':')[1]}` });
+            setFileState(id, { status: 'error', error: "Authentication failed" });
             ws.close();
         } else if (message.startsWith("header_error:")) {
-            setFileState(id, { status: 'error', error: `Header error: ${message.split(':')[1]}` });
+            setFileState(id, { status: 'error', error: "Invalid header" });
             ws.close();
         } else if (message.startsWith("upload_error:")) {
-            setFileState(id, { status: 'error', error: `Upload failed: ${message.split(':')[1]}` });
+            setFileState(id, { status: 'error', error: "Upload failed" });
             ws.close();
         } else if (message.startsWith("error:")) {
-            setFileState(id, { status: 'error', error: `Server error: ${message.split(':')[1]}` });
+            setFileState(id, { status: 'error', error: "Server error" });
             ws.close();
         }
     };
 
     ws.onerror = (event) => {
       console.error("WebSocket error:", event);
-      setFileState(id, { status: 'error', error: "Connection to server failed." });
+      setFileState(id, { status: 'error', error: "Connection failed" });
     };
 
     ws.onclose = (event) => {
       console.log(`WebSocket for ${file.name} closed. Code: ${event.code}`);
       setFileState(id, (currentState) => {
           if (currentState.status !== 'success' && currentState.status !== 'error') {
-              return { status: 'error', error: 'Connection lost unexpectedly.' };
+              return { status: 'error', error: 'Connection lost' };
           }
           return {};
       });
